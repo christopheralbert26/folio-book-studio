@@ -4,3 +4,9 @@ dist/
 !.env.example
 *.tar.gz
 test-fixtures/
+
+.sites-runtime/
+.wrangler/
+.vinext/
+.next/
+.dev.vars

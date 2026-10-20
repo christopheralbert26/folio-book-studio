@@ -4,7 +4,7 @@ import {newProject,revise,validateApproval,imagePpi} from '../src/model.js';
 import {PreviewProvider} from '../server/provider.js';
 import {LuluProvider} from '../server/lulu.js';
 import {fulfillApprovedOrder} from '../server/fulfillment.js';
-test('edits invalidate approval; rights and hash must match',()=>{const p=newProject();p.rights=true;p.approved={revision:1,hash:'abc'};assert.equal(validateApproval(p,'abc'),true);assert.equal(validateApproval(p,'other'),false);assert.equal(validateApproval(revise(p,{title:'Revised'}),'abc'),false);});
+test('edits invalidate approval; rights and both file hashes must match',()=>{const p=newProject();p.rights=true;p.approved={revision:1,hash:'abc',coverHash:'cover'};assert.equal(validateApproval(p,'abc','cover'),true);assert.equal(validateApproval(p,'abc','other'),false);assert.equal(validateApproval(p,'other','cover'),false);assert.equal(validateApproval(revise(p,{title:'Revised'}),'abc','cover'),false);});
 test('effective image resolution reflects physical placement',()=>{assert.equal(imagePpi(1200,1800,288,432),300);assert.equal(imagePpi(1200,1800,576,864),150);});
 test('preview mode has no fabricated formats, prices or orders',async()=>{const p=new PreviewProvider();assert.deepEqual((await p.formats()).formats,[]);await assert.rejects(()=>p.quote(),/not connected/);await assert.rejects(()=>p.submit(),/No order/);});
 test('Lulu fails closed without credentials or a verified catalog',async()=>{let calls=0;const p=new LuluProvider({fetchImpl:()=>calls++});assert.deepEqual((await p.formats({pageCount:100})).formats,[]);await assert.rejects(()=>p.quote({}),/not connected/);await assert.rejects(()=>p.submit({}),/locked/);assert.equal(calls,0);});

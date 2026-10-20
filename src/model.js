@@ -1,5 +1,5 @@
 export const defaultLayout = { width: 396, height: 612, font:'NotoSerif', size: 11, line: 1.55, margin: 48, gutter: 12, chapterRecto: true, numbering: true };
 export function newProject() { return { id: crypto.randomUUID(), title: 'Untitled book', subtitle: '', author: '', series: '', volume: '', language: 'English', description: '', color: '#304d43', coverStyle: 'botanical', layout: {...defaultLayout}, illustrations: [], revision: 1, approved: null, rights: false, updated: Date.now() }; }
 export function revise(project, changes) { return { ...project, ...changes, revision: project.revision + 1, approved: null }; }
-export function validateApproval(project, hash) { return Boolean(project.rights && project.approved?.revision === project.revision && project.approved?.hash === hash); }
+export function validateApproval(project, hash, coverHash) { return Boolean(project.rights && project.approved?.revision === project.revision && project.approved?.hash === hash && coverHash && project.approved?.coverHash===coverHash); }
 export function imagePpi(width, height, placedWidth, placedHeight) { return Math.min(width / (placedWidth / 72), height / (placedHeight / 72)); }

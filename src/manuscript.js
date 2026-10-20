@@ -1,8 +1,7 @@
 import JSZip from 'jszip';
 import { PDFDocument, PDFDict, PDFName } from 'pdf-lib';
 import * as pdfjs from 'pdfjs-dist';
-import worker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-pdfjs.GlobalWorkerOptions.workerSrc = worker;
+pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 export { pdfjs };
 const MAX_BYTES = 30 * 1024 * 1024;
 function xml(text) { const doc = new DOMParser().parseFromString(text,'application/xml'); if(doc.querySelector('parsererror')) throw Error('The EPUB contains damaged XML. Export a new EPUB or upload a print-ready PDF.'); return doc; }
@@ -64,13 +63,23 @@ export async function parseManuscript(file, progress) {
     blocks.push({type:'image',data:await entry.async('uint8array'),mime:extension==='png'?'image/png':'image/jpeg'});return;
    }
    if(['h1','h2','h3','p','blockquote','li'].includes(tag) && !node.querySelector('img')) {
-    const text=node.textContent.replace(/\s+/g,' ').trim();if(text)blocks.push({type:tag.startsWith('h')?'heading':'text',text});return;
+    const runs=[];
+    function inline(n,bold=false,italic=false){
+     if(n.nodeType===3){const text=n.textContent.replace(/\s+/g,' ');if(text)runs.push({text,bold,italic});return;}
+     if(n.nodeType!==1||['script','style'].includes(n.localName))return;
+     if(n.localName==='br'){runs.push({text:'\n',bold,italic});return;}
+     for(const child of n.childNodes)inline(child,bold||['b','strong'].includes(n.localName),italic||['i','em','cite'].includes(n.localName));
+    }
+    inline(node);
+    const text=runs.map(r=>r.text).join('').trim();
+    const align=node.getAttribute('style')?.match(/text-align\s*:\s*(center|right|left)/i)?.[1]?.toLowerCase()||'left';
+    if(text)blocks.push({type:tag.startsWith('h')?'heading':'text',text,runs,align,quote:tag==='blockquote'});return;
    }
    for(const child of node.children)await walk(child);
   }
   await walk(body); if(blocks.length)chapters.push({title:blocks.find(b=>b.type==='heading')?.text||`Chapter ${chapters.length+1}`,blocks});
  }
  if(!chapters.length)throw Error('No readable chapters found. Try exporting a print-ready PDF.');
- warnings.push({text:'EPUB proof uses a simplified reading layout. Original CSS, links, footnote positioning, and emphasis are not preserved. Check every page.',page:1});
+ warnings.push({text:'EPUB preserves basic bold/italic emphasis, paragraphs, headings, images and inline left/center/right alignment. Complex CSS and footnote positioning require a print-ready PDF. Check every page.',page:1});
  return {type:'epub',name:file.name,bytes,title:local(opf,'title')[0]?.textContent||file.name.replace(/\.epub$/i,''),author:local(opf,'creator')[0]?.textContent||'',chapters,count:chapters.length,warnings};
 }
