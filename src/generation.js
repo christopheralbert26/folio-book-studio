@@ -65,18 +65,19 @@ export async function generateProof(project,progress=()=>{}) {
 }
 export async function generateCover(project) {
  const doc=await PDFDocument.create();const {width,height}=project.layout;const p=doc.addPage([width,height]);
- // Uploaded covers are complete artwork, so they bypass every template overlay.
- if(project.coverArt){const img=await doc.embedPng((await transformedImage({...project.coverArt,gray:false,crop:0,rotation:0})).bytes);const s=Math.max(width/img.width,height/img.height);p.drawImage(img,{x:(width-img.width*s)/2,y:(height-img.height*s)/2,width:img.width*s,height:img.height*s});return doc.save();}
+ // Uploaded artwork keeps the book text, but omits template borders and ornaments.
+ if(project.coverArt){const img=await doc.embedPng((await transformedImage({...project.coverArt,gray:false,crop:0,rotation:0})).bytes);const s=Math.max(width/img.width,height/img.height);p.drawImage(img,{x:(width-img.width*s)/2,y:(height-img.height*s)/2,width:img.width*s,height:img.height*s});}
  const font=await addFont(doc);
- const c=project.color.match(/\w\w/g).map(v=>parseInt(v,16)/255);p.drawRectangle({x:0,y:0,width,height,color:rgb(...c)});const ink=rgb(.91,.87,.73);
- p.drawRectangle({x:20,y:20,width:width-40,height:height-40,borderWidth:.7,borderColor:ink});
+ const c=project.color.match(/\w\w/g).map(v=>parseInt(v,16)/255);const ink=rgb(.91,.87,.73);
+ if(project.coverArt)p.drawRectangle({x:0,y:0,width,height,color:rgb(...c),opacity:.5});
+ if(!project.coverArt){p.drawRectangle({x:0,y:0,width,height,color:rgb(...c)});p.drawRectangle({x:20,y:20,width:width-40,height:height-40,borderWidth:.7,borderColor:ink});}
  const centered=(text,size,y)=>{checkGlyphs(text,font);const lines=wrapText(text,font,size,width-70);lines.forEach((t,i)=>p.drawText(t,{x:(width-font.widthOfTextAtSize(t,size))/2,y:y-i*size*1.3,size,font,color:ink}));};
  centered(project.series?`${project.series}${project.volume?' · '+project.volume:''}`:'A PERSONAL EDITION',9,height-65);
  centered(project.title,30,height-135);if(project.subtitle)centered(project.subtitle,11,height-235);
- if(project.coverStyle==='botanical') {
+ if(!project.coverArt){if(project.coverStyle==='botanical') {
   for(let i=0;i<12;i++){const y=height*.2+i*11;const a=i%2?1:-1;p.drawLine({start:{x:width/2,y},end:{x:width/2+a*(42-i*2),y:y+27},thickness:.8,color:ink});p.drawEllipse({x:width/2+a*(30-i*1.3),y:y+19,xScale:12,yScale:3,rotate:{type:'degrees',angle:a*30},color:ink,opacity:.7});}
   p.drawLine({start:{x:width/2,y:height*.2-15},end:{x:width/2,y:height*.2+145},color:ink,thickness:.8});
- }else{p.drawCircle({x:width/2,y:height*.38,size:55,borderColor:ink,borderWidth:.8});p.drawCircle({x:width/2,y:height*.38,size:40,borderColor:ink,borderWidth:.8});}
+ }else{p.drawCircle({x:width/2,y:height*.38,size:55,borderColor:ink,borderWidth:.8});p.drawCircle({x:width/2,y:height*.38,size:40,borderColor:ink,borderWidth:.8});}}
  centered(project.author||'AUTHOR NAME',11,55);return doc.save();
 }
 export function download(bytes,name,type='application/pdf'){const url=URL.createObjectURL(new Blob([bytes],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);}
