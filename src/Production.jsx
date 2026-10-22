@@ -5,7 +5,7 @@ import {saveProject} from './storage';
 export function SetupStatus(){
  const [state,setState]=useState(null),[error,setError]=useState('');
  useEffect(()=>{api('status').then(setState).catch(e=>setError(e.message));},[]);
- return <section className="setup-status"><h3>Printing setup</h3>{error&&<p role="alert">{error}</p>}{state&&<><p>{state.checkoutReady?'Checkout is available.':'You can prepare and save your book. Printing is not available yet.'}</p><ul>{state.checks.map(c=><li key={c.key}><span>{c.ready?'✓':'○'}</span>{c.label}<small>{c.ready?'Ready':'Not connected / verified'}</small></li>)}</ul></>}</section>;
+ return <section className="setup-status"><h3>Printing setup</h3>{error&&<p role="alert">{error}</p>}{state&&<><p>{state.checkoutReady?(state.sandbox?'Sandbox checkout is available. Test payments do not print or ship books.':'Checkout is available.'):'You can prepare and save your book. Printing is not available yet.'}</p><ul>{state.checks.map(c=><li key={c.key}><span>{c.ready?'✓':'○'}</span>{c.label}<small>{c.ready?'Ready':'Not connected / verified'}</small></li>)}</ul></>}</section>;
 }
 export function PrintFormat({project,proof,onChange}){
  const [formats,setFormats]=useState([]),[error,setError]=useState('');
@@ -52,6 +52,7 @@ export function Checkout({project}){
  async function task(fn){setBusy(true);setError('');try{await fn();}catch(e){setError(e.message);}finally{setBusy(false);}}
  return <section className="production"><h3>Print this edition</h3>{error&&<p role="alert" className="error">{error}</p>}
  {!status?.checkoutReady?<SetupStatus/>:<>
+ {status.sandbox&&<p role="status">Sandbox test only: use test payment details. No books will be printed or shipped.</p>}
  <label className="field"><span>Approved production edition</span><select value={selected} onChange={e=>reset(()=>setSelected(e.target.value))}><option value="">Select an edition</option>{editions.map(e=><option key={e.id} value={e.id}>v{e.revision} · {new Date(e.created).toLocaleString()}</option>)}</select></label>
  {Object.keys(address).map(key=><label className="field" key={key}><span>{({name:'Recipient',street1:'Address',street2:'Address line 2',city:'City',state_code:'State / province',postcode:'Postal code',country_code:'Country code (US, GB, etc.)',phone_number:'Delivery phone'})[key]}</span><input maxLength={200} value={address[key]} onChange={e=>reset(()=>setAddress({...address,[key]:key==='country_code'?e.target.value.toUpperCase():e.target.value}))}/></label>)}
  <label className="field"><span>Copies (order one as a physical proof)</span><input type="number" min="1" max="999" value={quantity} onChange={e=>reset(()=>setQuantity(+e.target.value))}/></label>

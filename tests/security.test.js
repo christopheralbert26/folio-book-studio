@@ -9,6 +9,15 @@ test('checkout stays closed without accounts, external delivery and verification
  assert.equal(state.checks.find(c=>c.key==='storage').ready,true);
  assert.equal(readiness({CHECKOUT_ENABLED:'true'}).checkoutReady,false);
 });
+test('sandbox checkout requires test credentials and contact; live launch still requires all checks',()=>{
+ const env={DB:{},BUCKET:{},LULU_CLIENT_KEY:'test',LULU_CLIENT_SECRET:'test',LULU_ENVIRONMENT:'sandbox',STRIPE_SECRET_KEY:'sk_test_fixture',STRIPE_WEBHOOK_SECRET:'fixture',PRINT_CONTACT_EMAIL:'test@example.com',FILE_SIGNING_SECRET:'fixture',EXTERNAL_DELIVERY_VERIFIED:'true',CHECKOUT_ENABLED:'true',LULU_PROFILES_JSON:JSON.stringify([{id:'test',provider:'lulu',verifiedAt:'2026-10-22',podPackageId:'test',binding:'paperback',width:432,height:648,bleed:9,minPages:32,maxPages:800}])};
+ assert.equal(readiness(env).checkoutReady,true);
+ assert.equal(readiness(env).checks.find(c=>c.key==='operations').ready,false);
+ for(const delta of [{STRIPE_SECRET_KEY:'sk_live_fixture'},{PRINT_CONTACT_EMAIL:''},{EXTERNAL_DELIVERY_VERIFIED:'false'},{CHECKOUT_ENABLED:'false'}])assert.equal(readiness({...env,...delta}).checkoutReady,false);
+ const live={...env,LULU_ENVIRONMENT:'production',STRIPE_SECRET_KEY:'sk_live_fixture'};
+ assert.equal(readiness(live).checkoutReady,false);
+ assert.equal(readiness({...live,SANDBOX_ORDER_VERIFIED:'true',PHYSICAL_PROOF_VERIFIED:'true',OPERATIONS_VERIFIED:'true'}).checkoutReady,true);
+});
 test('webhook rejects tampering and replayed signatures',async()=>{
  const now=Date.now(),t=Math.floor(now/1000),raw='{"id":"event"}',secret='test-secret';
  const signature=await hmac(secret,`${t}.${raw}`);
