@@ -64,7 +64,7 @@ export function Checkout({project}){
 }
 export function Orders(){
  const [orders,setOrders]=useState([]),[error,setError]=useState(''),[busy,setBusy]=useState('');
- const load=()=>api('orders').then(setOrders).catch(e=>setError(e.message));
+ const load=()=>api('orders').then(rows=>{setOrders(rows);setError('');}).catch(e=>setError(e.message));
  useEffect(()=>{
   const id=new URLSearchParams(window.location.search).get('order');
   if(id&&/^[a-f0-9-]{36}$/i.test(id)){
@@ -75,9 +75,16 @@ export function Orders(){
  useEffect(()=>{
   const id=new URLSearchParams(window.location.search).get('order');
   if(orders.some(o=>o.id===id))document.getElementById(`order-${id}`)?.scrollIntoView({block:'center'});
- },[orders]);
+ },[orders.length]);
+ useEffect(()=>{
+  const timer=setInterval(()=>{if(document.visibilityState==='visible')load();},30000);
+  const visible=()=>{if(document.visibilityState==='visible')load();};
+  document.addEventListener('visibilitychange',visible);
+  return()=>{clearInterval(timer);document.removeEventListener('visibilitychange',visible);};
+ },[]);
+ const alerts={needs_attention:'Your payment was received, but printer submission needs review. Do not place another order. Contact support with the order number below.',rejected:'The printer rejected this order. Contact support to resolve the files or arrange a refund.',error:'The printer reported a problem. Contact support with this order number.',unpaid:'Your payment is confirmed. Printer billing needs attention before production can begin.'};
  const labels={quoted:'Estimate saved — payment not confirmed',paid:'Payment confirmed — preparing submission',submitting:'Payment confirmed — sending to printer',submitted:'Payment confirmed — sent to printer',unpaid:'Payment confirmed — printer billing pending',production_delayed:'Payment confirmed — queued for production',production_ready:'Ready for production',in_production:'Printing in progress',shipped:'Shipped',rejected:'Printer rejected order — support required',needs_attention:'Order needs support review',canceled:'Canceled'};
  async function action(id,name){setBusy(id);setError('');try{await api(`orders/${id}/${name}`,{});await load();}catch(e){setError(e.message);}finally{setBusy('');}}
- return <section className="orders"><h2>My orders</h2>{error&&<p role="alert">{error}</p>}{!orders.length&&<p>No orders yet. Your library and approved proofs stay available while printing is being connected.</p>}
- {orders.map(o=><article className="order-card" id={`order-${o.id}`} key={o.id}><h3>{o.payload.title}</h3><p>{labels[o.state]||o.state.replaceAll('_',' ')} · {o.payload.quantity} copies · {(o.total/100).toFixed(2)} {o.currency.toUpperCase()}</p><small>Order {o.id}</small><ol>{o.events.map((e,i)=><li key={i}>{e.message} <small>{new Date(e.created).toLocaleString()}</small></li>)}</ol>{o.payload.tracking?.map(u=><a key={u} href={u} target="_blank" rel="noreferrer">Track shipment ↗</a>)}<div className="inline-buttons"><button disabled={busy===o.id} onClick={()=>action(o.id,'refresh')}>Refresh order</button>{o.state==='quoted'&&<button disabled={busy===o.id} onClick={()=>action(o.id,'cancel')}>Cancel estimate</button>}</div></article>)}</section>;
+ return <section className="orders"><h2>My orders</h2><p>Printer notifications update your orders automatically. This page checks for saved updates every 30 seconds.</p>{error&&<p role="alert">{error}</p>}{!orders.length&&<p>No orders yet. Your library and approved proofs stay available while printing is being connected.</p>}
+ {orders.map(o=><article className="order-card" id={`order-${o.id}`} key={o.id}><h3>{o.payload.title}</h3><p>{labels[o.state]||o.state.replaceAll('_',' ')} · {o.payload.quantity} copies · {(o.total/100).toFixed(2)} {o.currency.toUpperCase()}</p><small>Order {o.id}</small>{(alerts[o.state]||o.payload.syncError)&&<p className="error" role="alert">{alerts[o.state]||o.payload.syncError}</p>}{o.payload.lastChecked&&<p><small>Printer status checked {new Date(o.payload.lastChecked).toLocaleString()}</small></p>}<ol>{o.events.map((e,i)=><li key={i}>{e.message} <small>{new Date(e.created).toLocaleString()}</small></li>)}</ol>{o.payload.tracking?.map(u=><a key={u} href={u} target="_blank" rel="noreferrer">Track shipment ↗</a>)}<div className="inline-buttons"><button disabled={busy===o.id} onClick={()=>action(o.id,'refresh')}>Refresh order</button>{o.state==='quoted'&&<button disabled={busy===o.id} onClick={()=>action(o.id,'cancel')}>Cancel estimate</button>}</div></article>)}</section>;
 }

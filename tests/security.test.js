@@ -58,3 +58,13 @@ test('Lulu tracking accepts supported response shapes and rejects unsafe links',
  assert.deepEqual(trackingUrls({line_items:[{tracking_urls:['https://carrier.test/one','javascript:alert(1)']},{status:{messages:{tracking_urls:'https://carrier.test/two'}}}],status:{line_item_statuses:[{messages:{tracking_urls:['https://carrier.test/one','https://user:password@carrier.test/private','invalid']}}]}}),['https://carrier.test/one','https://carrier.test/two']);
  assert.deepEqual(trackingUrls({}),[]);
 });
+
+
+test('Lulu signatures cover the raw payload in hex or base64',async()=>{
+ const {verifyLuluSignature}=await import('../server/security.js');
+ const raw='{"topic":"PRINT_JOB_STATUS_CHANGED"}',hex=await hmac('test',raw);
+ await verifyLuluSignature(raw,hex,'test');
+ await verifyLuluSignature(raw,Buffer.from(hex,'hex').toString('base64'),'test');
+ await assert.rejects(verifyLuluSignature(raw+' ',hex,'test'),/Invalid/);
+ await assert.rejects(verifyLuluSignature(raw,null,'test'),/Missing/);
+});

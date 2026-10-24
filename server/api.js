@@ -1,5 +1,5 @@
 import {PDFDocument} from 'pdf-lib';
-import {assert,validId,validHash,digest,jsonBody,limitedBody,sameOrigin,hmac,constantEqual,HttpError,verifyStripeSignature,moneyMinor} from './security.js';
+import {assert,validId,validHash,digest,jsonBody,limitedBody,sameOrigin,hmac,constantEqual,HttpError,verifyStripeSignature,verifyLuluSignature,moneyMinor} from './security.js';
 import {readiness,profiles} from './readiness.js';
 import {LuluProvider,trackingUrls} from './lulu.js';
 const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
@@ -41,7 +41,34 @@ async function stripe(env,path,body,key){
 export function matchingPayment(order,session,sandbox){
  return session.payment_status==='paid'&&session.client_reference_id===order.id&&session.amount_total===order.total&&session.currency===order.currency&&session.livemode===!sandbox;
 }
+function assertOrderEnvironment(env,order){
+ // All editions created before mode binding were sandbox-only.
+ const mode=JSON.parse(order.payload).environment||'sandbox';
+ assert(mode===(env.LULU_ENVIRONMENT==='production'?'production':'sandbox'),409,'This order belongs to a different printing environment. Contact support.');
+}
+async function syncPrinterStatus(env,order){
+ assertOrderEnvironment(env,order);
+ try{
+  const job=await provider(env).status(order.job_id);
+  assert(String(job.id)===String(order.job_id)&&job.external_id===order.id,502,'Printer order identity did not match');
+  const state=String(job.status?.name||'submitted').toLowerCase();
+  const payload=JSON.parse(order.payload),changed=Date.parse(job.status?.changed||'');
+  // Fetch current provider state instead of trusting webhook content; ignore older snapshots.
+  if(Number.isFinite(changed)&&payload.providerChanged&&changed<payload.providerChanged)return;
+  payload.tracking=trackingUrls(job);payload.lastChecked=Date.now();delete payload.syncError;
+  if(Number.isFinite(changed))payload.providerChanged=changed;
+  const result=await run(env.DB,'UPDATE orders SET state=?,payload=?,updated=? WHERE id=? AND payload=? AND state=?',state,JSON.stringify(payload),Date.now(),order.id,order.payload,order.state);
+  if(!result.meta.changes)throw new HttpError(503,'Order update overlapped another update. Please retry.');
+  if(state!==order.state)await event(env,order.id,state,`Lulu status: ${state.replaceAll('_',' ')}.`);
+ }catch(e){
+  const payload=JSON.parse(order.payload);
+  payload.syncError='The latest printer update could not be retrieved. Your last confirmed status is shown. No new print order has been submitted.';
+  await run(env.DB,'UPDATE orders SET payload=? WHERE id=? AND payload=?',JSON.stringify(payload),order.id,order.payload);
+  throw e;
+ }
+}
 async function reconcile(env,order,origin){
+ assertOrderEnvironment(env,order);
  const ready=readiness(env);
  if(order.payment_id&&!order.job_id){
   const session=await stripe(env,`/checkout/sessions/${encodeURIComponent(order.payment_id)}`);
@@ -70,27 +97,33 @@ async function reconcile(env,order,origin){
    console.error('fulfillment_needs_attention',order.id,e.status||'provider_error');
   }
  }
- if(order.job_id){
-  const job=await provider(env).status(order.job_id);
-  const state=String(job.status?.name||'submitted').toLowerCase();
-  const payload=JSON.parse(order.payload);
-  payload.tracking=trackingUrls(job);
-  if(state!==order.state)await event(env,order.id,state,`Lulu status: ${state.replaceAll('_',' ')}.`);
-  await run(env.DB,'UPDATE orders SET state=?,payload=?,updated=? WHERE id=?',state,JSON.stringify(payload),Date.now(),order.id);
- }
+ if(order.job_id)await syncPrinterStatus(env,order);
  return owned(env.DB,'orders',order.id,order.owner);
 }
 export async function handleApi(request,env){
  const url=new URL(request.url),path=url.pathname.replace(/^\/api\/?/,'').split('/'),method=request.method;
  try{
   assert(env.DB&&env.BUCKET,503,'Account storage is being connected. Your local draft is safe.');
-  // These two endpoints additionally require an external route past private-site sign-in.
+  // Printer downloads and signed vendor notifications are accessible without visitor sign-in.
   if(path[0]==='print-file'&&method==='GET'){
    const owner=url.searchParams.get('owner'),hash=url.searchParams.get('hash'),expires=url.searchParams.get('expires'),sig=url.searchParams.get('sig');
    assert(env.FILE_SIGNING_SECRET&&owner&&validHash(hash)&&Number(expires)>Date.now()&&Number(expires)<=Date.now()+25*3600*1000,403,'Expired file link');
    assert(constantEqual(sig,await hmac(env.FILE_SIGNING_SECRET,`${owner}:${hash}:${expires}`)),403,'Invalid file link');
    const file=await env.BUCKET.get(fileKey(owner,hash));assert(file,404,'File not found');
    return new Response(file.body,{headers:{'Content-Type':'application/pdf','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+  }
+  if(path[0]==='lulu-webhook'&&method==='POST'){
+   const raw=new TextDecoder().decode(await limitedBody(request,1024*1024));
+   await verifyLuluSignature(raw,request.headers.get('lulu-hmac-sha256'),env.LULU_CLIENT_SECRET);
+   let message;try{message=JSON.parse(raw);}catch{throw new HttpError(400,'Invalid JSON');}
+   if(message.topic==='PRINT_JOB_STATUS_CHANGED'){
+    const id=message.data?.id;
+    assert(typeof id==='number'||typeof id==='string',400,'Missing print job ID');
+    const order=await one(env.DB,'SELECT * FROM orders WHERE job_id=?',String(id));
+    // Ignore vendor test fixtures and unrelated jobs without disclosing account data.
+    if(order)await syncPrinterStatus(env,order);
+   }
+   return json({received:true});
   }
   if(path[0]==='stripe-webhook'&&method==='POST'){
    const raw=new TextDecoder().decode(await limitedBody(request,1024*1024));
@@ -222,12 +255,13 @@ export async function handleApi(request,env){
     const quote=await provider(env).quote({line_items:[{page_count:m.count,pod_package_id:m.profile.podPackageId,quantity:b.quantity}],shipping_address:a,shipping_option:b.shippingLevel});
     assert(['USD','EUR','GBP','CAD','AUD'].includes(quote.currency),502,'This currency is not enabled');
     const id=crypto.randomUUID(),total=moneyMinor(quote.total_cost_incl_tax),now=Date.now();
-    const payload={address:a,quantity:b.quantity,shippingLevel:b.shippingLevel,quote,title:m.title,tracking:[]};
+    const payload={environment:env.LULU_ENVIRONMENT==='production'?'production':'sandbox',address:a,quantity:b.quantity,shippingLevel:b.shippingLevel,quote,title:m.title,tracking:[]};
     await run(env.DB,'INSERT INTO orders (id,owner,edition_id,payload,state,total,currency,expires,updated,created,attempted) VALUES (?,?,?,?,?,?,?,?,?,?,0)',id,owner,ed.id,JSON.stringify(payload),'quoted',total,quote.currency.toLowerCase(),now+30*60000,now,now);
     await event(env,id,'quoted','Live printer estimate saved for 30 minutes.');
     return json({id,total,currency:quote.currency,quote});
    }
    const order=await owned(env.DB,'orders',path[1],owner);
+   if(method==='POST')assertOrderEnvironment(env,order);
    if(method==='POST'&&path[2]==='checkout'){
     const ready=readiness(env);assert(ready.checkoutReady,503,'Checkout is not enabled');
     assert(order.state==='quoted'&&order.expires>Date.now(),409,'Get a new estimate before paying');

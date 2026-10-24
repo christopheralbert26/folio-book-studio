@@ -32,3 +32,10 @@ export function moneyMinor(value){
  const [whole,cents]=value.split('.');const amount=Number(whole)*100+Number(cents);
  assert(Number.isSafeInteger(amount)&&amount>0,502,'Invalid price');return amount;
 }
+
+export async function verifyLuluSignature(raw,header,secret){
+ assert(secret&&header,400,'Missing webhook signature');
+ const hex=await hmac(secret,raw);
+ const base64=btoa(String.fromCharCode(...hex.match(/../g).map(v=>parseInt(v,16))));
+ assert(constantEqual(header,hex)||constantEqual(header,base64),400,'Invalid webhook signature');
+}

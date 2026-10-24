@@ -27,9 +27,9 @@ proof and operational readiness. Never treat these sandbox results as live appro
 
 The owner authorized making the Site publicly reachable while retaining
 API-level account isolation. Verify that Lulu can fetch `/api/print-file` and Stripe
-can post to `/api/stripe-webhook` after publication. These are the only anonymous
-data endpoints: file access requires an expiring HMAC signature and the webhook
-requires Stripe signature verification.
+can post to `/api/stripe-webhook` after publication. Anonymous data endpoints use independent authorization: print files require
+an expiring HMAC signature, Stripe notifications require Stripe signatures, and
+`/api/lulu-webhook` requires the raw-body Lulu-HMAC-SHA256 signature.
 Do not put the Site bypass bearer token in URLs or expose it to the printer.
 Do not set `EXTERNAL_DELIVERY_VERIFIED=true` until both routes have been tested
 from outside a signed-in browser.
@@ -88,8 +88,20 @@ Never set `attempted=0` simply to make a retry work.
 Stripe webhook verification checks the raw body, HMAC and timestamp. Reconciliation
 retrieves the Checkout Session from Stripe rather than trusting browser success
 parameters or event payment claims. The authenticated Refresh order action can
-recover missed notifications. Background reconciliation/alert scheduling is still
-required for unattended operation.
+recover missed notifications. Lulu status notifications now update existing orders unattended through
+`/api/lulu-webhook`. Configure PRINT_JOB_STATUS_CHANGED on the matching Lulu
+environment. The handler re-fetches the existing job, checks its external order
+ID, rejects environment mismatches, and never submits an order. Failed reads
+preserve status and add a persistent in-account notice; non-2xx responses let
+Lulu retry. Older provider snapshots are ignored; conflicting updates request a
+retry. My Orders reads saved updates every 30 seconds while visible.
+
+Lulu deactivates a webhook after repeated failed deliveries. Check webhook
+health and delivery history after outages and reactivate only after fixing the
+cause. Out-of-band email/SMS alerts and periodic missed-webhook reconciliation
+are not configured. In-account notices are not a staffed support channel.
+New orders bind their environment; historical orders are sandbox-only. Configure
+a separate production webhook and re-test before any production launch.
 
 ## Retention, backups and support
 
