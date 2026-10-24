@@ -51,3 +51,10 @@ test('file reads derive the namespace from authenticated identity',async()=>{
  for(const id of ['alice','bob'])await handleApi(new Request(`https://folio.test/api/files/${hash}`,{headers:{'oai-authenticated-user-id':id}}),env);
  assert.equal(keys.length,2);assert.notEqual(keys[0],keys[1]);assert(keys.every(k=>k.endsWith(hash)));
 });
+
+
+test('Lulu tracking accepts supported response shapes and rejects unsafe links',async()=>{
+ const {trackingUrls}=await import('../server/lulu.js');
+ assert.deepEqual(trackingUrls({line_items:[{tracking_urls:['https://carrier.test/one','javascript:alert(1)']},{status:{messages:{tracking_urls:'https://carrier.test/two'}}}],status:{line_item_statuses:[{messages:{tracking_urls:['https://carrier.test/one','https://user:password@carrier.test/private','invalid']}}]}}),['https://carrier.test/one','https://carrier.test/two']);
+ assert.deepEqual(trackingUrls({}),[]);
+});

@@ -1,7 +1,7 @@
 import {PDFDocument} from 'pdf-lib';
 import {assert,validId,validHash,digest,jsonBody,limitedBody,sameOrigin,hmac,constantEqual,HttpError,verifyStripeSignature,moneyMinor} from './security.js';
 import {readiness,profiles} from './readiness.js';
-import {LuluProvider} from './lulu.js';
+import {LuluProvider,trackingUrls} from './lulu.js';
 const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 const fileKey=(owner,hash)=>`users/${owner}/files/${hash}`;
 const one=(db,sql,...args)=>db.prepare(sql).bind(...args).first();
@@ -74,7 +74,7 @@ async function reconcile(env,order,origin){
   const job=await provider(env).status(order.job_id);
   const state=String(job.status?.name||'submitted').toLowerCase();
   const payload=JSON.parse(order.payload);
-  payload.tracking=(job.line_items||[]).flatMap(i=>i.tracking_urls||[]).filter(u=>typeof u==='string'&&u.startsWith('https://'));
+  payload.tracking=trackingUrls(job);
   if(state!==order.state)await event(env,order.id,state,`Lulu status: ${state.replaceAll('_',' ')}.`);
   await run(env.DB,'UPDATE orders SET state=?,payload=?,updated=? WHERE id=?',state,JSON.stringify(payload),Date.now(),order.id);
  }

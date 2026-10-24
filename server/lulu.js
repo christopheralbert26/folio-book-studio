@@ -1,6 +1,6 @@
 import {PrintProvider,ProviderUnavailable} from './provider.js';
 // Adapter seam based on Lulu's official OpenAPI, checked 2026-10-19.
-// No routes mount this adapter in the static preview deployment.
+// Used by the authenticated fulfillment service.
 export class LuluProvider extends PrintProvider {
  constructor({clientKey,clientSecret,sandbox=true,profiles=[],fetchImpl=fetch}){super();this.key=clientKey;this.secret=clientSecret;this.base=sandbox?'https://api.sandbox.lulu.com':'https://api.lulu.com';this.profiles=profiles;this.fetch=fetchImpl;}
  async token(){
@@ -20,4 +20,11 @@ export class LuluProvider extends PrintProvider {
  // Caller must be the trusted fulfillment service, not an HTTP body passed through.
  async submit(){throw new ProviderUnavailable('Submission is locked until durable payment, storage, and preflight adapters are implemented and sandbox-tested.');}
  async status(id){return this.request(`/print-jobs/${encodeURIComponent(id)}/`);}
+}
+
+// Lulu exposes tracking on line items and in status messages across lifecycle responses.
+export function trackingUrls(job){
+ const rows=[...(job.line_items||[]),...(job.status?.line_item_statuses||[])];
+ const values=rows.flatMap(i=>[i.tracking_urls,i.status?.messages?.tracking_urls,i.messages?.tracking_urls]).flat().filter(v=>typeof v==='string');
+ return [...new Set(values.filter(value=>{try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password;}catch{return false;}}))];
 }

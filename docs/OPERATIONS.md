@@ -17,13 +17,13 @@ and clears approval.
 
 ## What is not operational yet
 
-The owner has created Lulu and Stripe accounts. Secure credential configuration
-and vendor tests are pending. No card has been charged and no order submitted. Vendor formats and prices are not fabricated.
-
-The application contains the account API, production cover generation,
-validation/approval endpoints, live quote adapter, Stripe Checkout adapter,
-signature-checked webhook, order reconciliation and history UI. These paths still
-need real sandbox testing before activation.
+Sandbox credentials and Stripe test checkout are connected. On October 22–23,
+2026, an original 64-page EPUB proof and full cover passed Lulu validation;
+Stripe test payment and its signed webhook created Lulu job 353261 exactly once.
+Lulu sandbox billing was completed, and the job reached PRODUCTION_DELAYED.
+No real money was charged and no physical book ordered. Simulated shipment and
+tracking verification are still pending. Production remains gated by physical
+proof and operational readiness. Never treat these sandbox results as live approval.
 
 The owner authorized making the Site publicly reachable while retaining
 API-level account isolation. Verify that Lulu can fetch `/api/print-file` and Stripe
