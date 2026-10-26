@@ -1,3 +1,4 @@
+import {exportOperations} from './operations-backup.js';
 import {supportApi,isOperator} from './support.js';
 import {PDFDocument} from 'pdf-lib';
 import {assert,validId,validHash,digest,jsonBody,limitedBody,sameOrigin,hmac,constantEqual,HttpError,verifyStripeSignature,verifyLuluSignature,moneyMinor} from './security.js';
@@ -140,6 +141,11 @@ export async function handleApi(request,env){
   const owner=await digest(new TextEncoder().encode(identity));
   if(!['GET','HEAD'].includes(method))sameOrigin(request);
   if(path[0]==='status'&&method==='GET')return json({...readiness(env),account:owner,operator:isOperator(env,owner)});
+  if(path[0]==='admin'&&path[1]==='backup'&&method==='GET'){
+   assert(isOperator(env,owner),403,'Owner access required');
+   const backup=await exportOperations(env.DB);
+   return new Response(JSON.stringify(backup),{headers:{'Content-Type':'application/json','Content-Disposition':`attachment; filename="folio-orders-${new Date().toISOString().slice(0,10)}.json"`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+  }
   if(path[0]==='support'||(path[0]==='admin'&&path[1]==='orders'))return json(await supportApi(request,env,owner,path));
   if(path[0]==='files'){
    const hash=path[1];assert(validHash(hash),400,'Invalid file ID');

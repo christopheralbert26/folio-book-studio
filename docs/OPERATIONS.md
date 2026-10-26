@@ -151,3 +151,24 @@ request/problem filtering on the current page. It excludes shipping addresses an
 manuscripts. Customer reads and writes always check order ownership. Conversations
 use version checks, bounded messages and a permanent audit trail; replies appear
 in the customer's account, without email notifications or a promised response time.
+
+
+## Order and support recovery
+
+The owner desk downloads `/api/admin/backup`, restricted by SUPPORT_OWNER_HASH.
+It includes orders (including address, payment/job IDs and submission locks), events,
+and support conversations from one consistent SQL read. It excludes secrets,
+manuscript bytes, immutable editions, projects, and R2 content. This is a scoped
+operational backup, not a complete platform disaster-recovery snapshot. Keep the
+file private; its SHA-256 checksum detects corruption, not malicious replacement.
+The endpoint refuses oversized exports rather than returning a partial backup.
+
+Test recovery offline with:
+`node scripts/restore-operations.mjs <downloaded-json> <new-recovery.sqlite>`
+The tool only creates a new local SQLite file, refuses existing destinations,
+validates checksums and order references, retains IDs and submission markers,
+and checks database integrity. It never calls Stripe, Lulu, or hosted storage.
+Use the recovered database for inspection/reconciliation. Do not deploy it as
+production: it intentionally has no manuscript or edition records. Live recovery
+requires coordinated D1/R2 snapshots, a maintenance window and provider payment/job
+reconciliation. Never clear attempted markers or replay fulfillment from a backup.

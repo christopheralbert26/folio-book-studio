@@ -105,3 +105,29 @@ test('support is owner-isolated, operator-only, versioned and does not change pa
  delete env.SUPPORT_OWNER_HASH;assert.equal((await handleApi(request('admin/orders','operator'),env)).status,403);
  sqlite.close();
 });
+
+
+test('owner backups restore offline with intact submission locks and reject corruption',async(t)=>{
+ const {env,sqlite}=fixture();const {restoreOperations}=await import('../scripts/restore-operations.mjs');
+ const os=await import('node:os'),path=await import('node:path');
+ const directory=fs.mkdtempSync(path.join(os.tmpdir(),'folio-recovery-'));
+ t.after(()=>{sqlite.close();if(path.dirname(directory)===os.tmpdir())fs.rmSync(directory,{recursive:true});});
+ env.SUPPORT_OWNER_HASH=await digest(new TextEncoder().encode('operator'));
+ sqlite.prepare("INSERT INTO orders (id,owner,edition_id,payload,state,total,currency,expires,updated,created,attempted,payment_id,job_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)").run('recovery-order','alice','edition','{"title":"Test","address":{"name":"Fixture"}}','in_production',1217,'usd',0,1,1,1,'cs_test_fixture','353261');
+ sqlite.prepare('INSERT INTO events VALUES (?,?,?,?,?)').run('event','recovery-order','submitted','Submitted once',1);
+ sqlite.prepare('INSERT INTO support VALUES (?,?,?,?,?,?,?,?)').run('recovery-order','alice','order','resolved','[{"id":"message","text":"Fixture"}]',1,1,1);
+ assert.equal((await handleApi(request('admin/backup','alice'),env)).status,403);
+ const response=await handleApi(request('admin/backup','operator'),env);
+ assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');assert.ok(response.headers.get('content-disposition').includes('attachment'));
+ const backup=await response.json(),input=path.join(directory,'backup.json'),output=path.join(directory,'recovery.sqlite');
+ fs.writeFileSync(input,JSON.stringify(backup));
+ const result=await restoreOperations(input,output);assert.deepEqual(result.counts,{orders:1,events:1,support:1});
+ const restored=new DatabaseSync(output);assert.equal(restored.prepare('SELECT attempted FROM orders').get().attempted,1);assert.equal(restored.prepare('SELECT job_id FROM orders').get().job_id,'353261');assert.equal(restored.prepare('SELECT COUNT(*) AS n FROM projects').get().n,0);restored.close();
+ await assert.rejects(restoreOperations(input,output),/EEXIST/);
+ fs.writeFileSync(input,JSON.stringify({...backup,payload:backup.payload+' '}));
+ await assert.rejects(restoreOperations(input,path.join(directory,'corrupt.sqlite')),/checksum/);assert.equal(fs.existsSync(path.join(directory,'corrupt.sqlite')),false);
+ const broken=JSON.parse(backup.payload);broken.support[0].owner='other';const payload=JSON.stringify(broken);
+ fs.writeFileSync(input,JSON.stringify({...backup,payload,checksum:await digest(new TextEncoder().encode(payload))}));
+ await assert.rejects(restoreOperations(input,path.join(directory,'broken.sqlite')),/references/);
+ delete env.SUPPORT_OWNER_HASH;assert.equal((await handleApi(request('admin/backup','operator'),env)).status,403);
+});
