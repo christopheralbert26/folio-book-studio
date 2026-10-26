@@ -7,6 +7,7 @@ import {digest,hmac} from '../server/security.js';
 function fixture(){
  const sqlite=new DatabaseSync(':memory:');
  sqlite.exec(fs.readFileSync(new URL('../drizzle/0000_bizarre_iron_lad.sql',import.meta.url),'utf8'));
+ sqlite.exec(fs.readFileSync(new URL('../drizzle/0001_condemned_squadron_supreme.sql',import.meta.url),'utf8'));
  const DB={prepare(sql){return {bind(...args){const stmt=sqlite.prepare(sql);return {async first(){return stmt.get(...args)||null;},async all(){return {results:stmt.all(...args)};},async run(){const r=stmt.run(...args);return {meta:{changes:Number(r.changes)}};}};}};}};
  const objects=new Map();
  const BUCKET={async put(key,body){objects.set(key,typeof body==='string'?new TextEncoder().encode(body):body);},async delete(key){objects.delete(key);},async get(key){const b=objects.get(key);return b?{body:b,async json(){return JSON.parse(new TextDecoder().decode(b));},async arrayBuffer(){return b.buffer.slice(b.byteOffset,b.byteOffset+b.byteLength);}}:null;}};
@@ -76,4 +77,31 @@ test('signed Lulu notifications update only existing orders, survive retries and
   const calls=providerCalls;env.LULU_ENVIRONMENT='production';
   assert.equal((await deliver()).status,409);assert.equal(providerCalls,calls);
  }finally{globalThis.fetch=originalFetch;sqlite.close();}
+});
+
+
+test('support is owner-isolated, operator-only, versioned and does not change payments',async()=>{
+ const {env,sqlite}=fixture();const alice=await digest(new TextEncoder().encode('alice'));
+ env.SUPPORT_OWNER_HASH=await digest(new TextEncoder().encode('operator'));
+ sqlite.prepare("INSERT INTO orders (id,owner,edition_id,payload,state,total,currency,expires,updated,created,attempted) VALUES (?,?,?,?,?,?,?,?,?,?,?)").run('support-order',alice,'edition','{"title":"Private book","address":{"name":"Private address"}}','in_production',1217,'usd',0,1,1,1);
+ const body={message:'Please review my order.',category:'refund',version:0,messageId:'msg-one',status:'resolved',actor:'support'};
+ assert.equal((await handleApi(request('admin/orders','alice'),env)).status,403);
+ assert.equal((await handleApi(request('support/support-order','bob','POST',body),env)).status,404);
+ assert.equal((await handleApi(request('support/support-order','alice','POST',body),env)).status,200);
+ let data=await (await handleApi(request('support/support-order','alice'),env)).json();
+ assert.equal(data.ticket.status,'open');assert.equal(data.ticket.messages[0].actor,'customer');
+ assert.equal((await handleApi(request('support/support-order','bob'),env)).status,404);
+ assert.equal((await handleApi(request('support/support-order','alice','POST',body),env)).status,200);
+ assert.equal((await handleApi(request('support/support-order','alice','POST',{...body,messageId:'stale'}),env)).status,409);
+ const reply={message:'Test request resolved; no money moved.',status:'resolved',version:1,messageId:'reply-one'};
+ assert.equal((await handleApi(request('admin/orders/support-order','alice','POST',reply),env)).status,403);
+ assert.equal((await handleApi(request('admin/orders/support-order','operator','POST',reply),env)).status,200);
+ data=await (await handleApi(request('support/support-order','alice'),env)).json();assert.equal(data.ticket.messages.length,2);assert.equal(data.ticket.status,'resolved');
+ assert.equal(sqlite.prepare('SELECT state FROM orders').get().state,'in_production');
+ assert.equal((await handleApi(request('support/support-order','alice','POST',{...body,version:2,messageId:'follow-up'}),env)).status,200);
+ data=await (await handleApi(request('admin/orders','operator'),env)).json();assert.equal(data.orders[0].support_status,'open');assert.equal(data.orders[0].payload,undefined);
+ const cross=new Request('https://folio.test/api/admin/orders/support-order',{method:'POST',headers:{'oai-authenticated-user-id':'operator',Origin:'https://evil.test'},body:JSON.stringify(reply)});
+ assert.equal((await handleApi(cross,env)).status,403);
+ delete env.SUPPORT_OWNER_HASH;assert.equal((await handleApi(request('admin/orders','operator'),env)).status,403);
+ sqlite.close();
 });

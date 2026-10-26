@@ -1,3 +1,4 @@
+import {supportApi,isOperator} from './support.js';
 import {PDFDocument} from 'pdf-lib';
 import {assert,validId,validHash,digest,jsonBody,limitedBody,sameOrigin,hmac,constantEqual,HttpError,verifyStripeSignature,verifyLuluSignature,moneyMinor} from './security.js';
 import {readiness,profiles} from './readiness.js';
@@ -138,7 +139,8 @@ export async function handleApi(request,env){
   assert(identity,401,'Sign in with ChatGPT to save to your account');
   const owner=await digest(new TextEncoder().encode(identity));
   if(!['GET','HEAD'].includes(method))sameOrigin(request);
-  if(path[0]==='status'&&method==='GET')return json({...readiness(env),account:owner});
+  if(path[0]==='status'&&method==='GET')return json({...readiness(env),account:owner,operator:isOperator(env,owner)});
+  if(path[0]==='support'||(path[0]==='admin'&&path[1]==='orders'))return json(await supportApi(request,env,owner,path));
   if(path[0]==='files'){
    const hash=path[1];assert(validHash(hash),400,'Invalid file ID');
    if(method==='PUT'){

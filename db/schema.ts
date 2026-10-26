@@ -27,3 +27,10 @@ export const events=sqliteTable("events",{
  id:text("id").primaryKey(),orderId:text("order_id").notNull(),kind:text("kind").notNull(),
  message:text("message").notNull(),created:integer("created").notNull()
 });
+
+export const support=sqliteTable("support",{
+ orderId:text("order_id").primaryKey(),owner:text("owner").notNull(),
+ category:text("category").notNull(),status:text("status").notNull(),
+ messages:text("messages").notNull(),version:integer("version").notNull(),
+ created:integer("created").notNull(),updated:integer("updated").notNull()
+},t=>[index("support_owner").on(t.owner)]);

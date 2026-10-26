@@ -133,3 +133,21 @@ Run `node --test tests/*.test.js`, generate schema migrations with
 migrations once with Wrangler using the generated `dist/server/wrangler.json`.
 Use the starter's loopback sign-in route for a local test identity. Production
 identity continues to be owned by Sites.
+
+
+## Customer support and owner order desk
+
+Customers open a private conversation from My Orders. Request types include
+printing, shipping, cancellation and refund. Follow-ups reopen a resolved request.
+The owner replies in the account, marking requests open, reviewing or resolved.
+Replies are customer-visible; do not enter private internal notes or secrets.
+This workflow never cancels printing, refunds payment, or resets submission locks.
+Confirm any cancellation in Lulu and refund in Stripe before recording the result.
+
+SUPPORT_OWNER_HASH must be configured through runtime secrets to the owner's
+account namespace. No browser request can grant this role. With the setting absent,
+management endpoints deny access. The desk lists 50 orders per page and offers
+request/problem filtering on the current page. It excludes shipping addresses and
+manuscripts. Customer reads and writes always check order ownership. Conversations
+use version checks, bounded messages and a permanent audit trail; replies appear
+in the customer's account, without email notifications or a promised response time.
