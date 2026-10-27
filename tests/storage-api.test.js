@@ -131,3 +131,35 @@ test('owner backups restore offline with intact submission locks and reject corr
  await assert.rejects(restoreOperations(input,path.join(directory,'broken.sqlite')),/references/);
  delete env.SUPPORT_OWNER_HASH;assert.equal((await handleApi(request('admin/backup','operator'),env)).status,403);
 });
+
+
+test('full recovery preserves manuscripts, account boundaries and fulfillment references',async(t)=>{
+ const {env,sqlite,objects}=fixture(),{restoreFull}=await import('../scripts/restore-full.mjs');
+ const {default:JSZip}=await import('jszip'),os=await import('node:os'),path=await import('node:path');
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'folio-full-'));
+ t.after(()=>{sqlite.close();if(path.dirname(dir)===os.tmpdir())fs.rmSync(dir,{recursive:true});});
+ const owner=await digest(new TextEncoder().encode('alice')),bytes=new TextEncoder().encode('original manuscript bytes'),hash=await digest(bytes),key=`users/${owner}/projects/book/version-one.json`;
+ env.SUPPORT_OWNER_HASH=await digest(new TextEncoder().encode('operator'));env.STRIPE_SECRET_KEY='must-not-export';
+ sqlite.prepare('INSERT INTO files VALUES (?,?,?,?)').run(owner,hash,bytes.length,1);objects.set(`users/${owner}/files/${hash}`,bytes);
+ sqlite.prepare('INSERT INTO projects VALUES (?,?,?,?,?,?,?)').run(owner,'book','Test book',key,1,1,0);
+ objects.set(key,new TextEncoder().encode(JSON.stringify({id:'book',title:'Test book',source:{$file:hash}})));
+ sqlite.prepare('INSERT INTO editions VALUES (?,?,?,?,?,?,?,?)').run('edition',owner,'book',1,JSON.stringify({interiorHash:hash,coverHash:hash}),1,'approved',null);
+ sqlite.prepare('INSERT INTO orders VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)').run('order',owner,'edition','{}','in_production',1217,'usd',0,'cs_test','353261',1,1,1);
+ assert.equal((await handleApi(request('admin/full-backup','alice'),env)).status,403);
+ const snapshot=await (await handleApi(request('admin/full-backup','operator'),env)).json();assert.equal(snapshot.objects.length,2);assert.ok(!JSON.stringify(snapshot).includes('must-not-export'));
+ const zip=new JSZip();
+ for(const object of snapshot.objects){
+  const route='admin/backup-object?key='+encodeURIComponent(object.key);
+  assert.equal((await handleApi(request(route,'alice'),env)).status,403);
+  const response=await handleApi(request(route,'operator'),env);assert.equal(response.status,200);
+  const content=new Uint8Array(await response.arrayBuffer());object.sha256=await digest(content);object.bytes=content.length;zip.file('objects/'+object.key,content);
+ }
+ assert.equal((await handleApi(request('admin/backup-object?key=../../secret','operator'),env)).status,404);
+ zip.file('snapshot.json',JSON.stringify(snapshot));const input=path.join(dir,'backup.zip'),output=path.join(dir,'restored');fs.writeFileSync(input,await zip.generateAsync({type:'nodebuffer'}));
+ const result=await restoreFull(input,output);assert.equal(result.objects,2);assert.equal(result.tables.editions,1);
+ assert.deepEqual(new Uint8Array(fs.readFileSync(path.join(output,'objects',`users/${owner}/files/${hash}`))),bytes);
+ const db=new DatabaseSync(path.join(output,'database.sqlite'));assert.equal(db.prepare('SELECT attempted FROM orders').get().attempted,1);assert.equal(db.prepare('SELECT owner FROM projects').get().owner,owner);db.close();
+ await assert.rejects(restoreFull(input,output),/EEXIST/);
+ zip.file('objects/'+snapshot.objects[0].key,new Uint8Array(bytes.length));fs.writeFileSync(input,await zip.generateAsync({type:'nodebuffer'}));await assert.rejects(restoreFull(input,path.join(dir,'corrupt')),/checksum/);assert.equal(fs.existsSync(path.join(dir,'corrupt')),false);
+ objects.delete(key);assert.equal((await handleApi(request('admin/backup-object?key='+encodeURIComponent(key),'operator'),env)).status,409);
+});

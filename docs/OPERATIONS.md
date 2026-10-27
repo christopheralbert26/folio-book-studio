@@ -172,3 +172,48 @@ Use the recovered database for inspection/reconciliation. Do not deploy it as
 production: it intentionally has no manuscript or edition records. Live recovery
 requires coordinated D1/R2 snapshots, a maintenance window and provider payment/job
 reconciliation. Never clear attempted markers or replay fulfillment from a backup.
+
+
+## Full application and hosting recovery
+
+Owner desk → Download full application backup exports all six application tables
+in one SQL snapshot, then all indexed file bytes and active project manifests.
+Each object is checksummed. A concurrent project edit may remove its old manifest;
+if any object is unavailable or mismatched the download fails, never claiming a
+partial success. Retry when editing is quiet. Browser export limits are 1,000
+objects, 120 MB indexed file bytes, and bounded metadata. Larger sites require
+managed D1/R2 exports. Deleted project tombstones are retained; their intentionally
+deleted manifests and unindexed orphan objects are not part of the logical backup.
+
+This archive contains all accounts' private manuscripts and delivery information.
+It is an offline owner backup, not a public asset. Secrets are deliberately excluded.
+The checksum detects corruption; it does not authenticate an archive's provenance.
+
+Restore into a new isolated directory:
+`node scripts/restore-full.mjs <full-backup.zip> <new-recovery-directory>`
+This recreates database.sqlite and objects/users/... with original namespaces.
+All checksums, project file references, print edition references, order references,
+and database integrity are checked before reporting success. It never sends a
+payment or print request and cannot overwrite an existing directory.
+
+Preserve a Git bundle of the published source, the exact built deployment archive,
+and a record of the Site/version/commit IDs alongside the data backup. Preserve
+runtime credentials separately in a secure credential store. Configuration names
+are in .env.example; actual credentials are never part of Git or these downloads.
+The original Sites project ID and authenticated-user namespaces must be retained.
+A different Site may issue different user IDs and requires an audited identity
+mapping; do not restore user namespaces blindly into another public Site.
+
+For code-only recovery, use Sites to deploy the matching previously saved version.
+For an actual D1/R2 loss, keep checkout and fulfillment disabled, have the hosting
+operator restore the verified database and object keys together, restore the
+runtime configuration, then reconcile Stripe payment IDs and Lulu job IDs before
+re-enabling writes. Never reset attempted flags or replay fulfillment from a backup.
+Retest anonymous access denial, separate-account isolation, manuscript downloads,
+proofs and signed vendor callbacks. Source restoration is separate from data rollback.
+
+The currently available Sites connector has no D1/R2 restore or point-in-time
+recovery operation. Therefore a live provider disaster-recovery exercise requires
+Sites hosting support; a local recovery drill does not prove provider recovery,
+secret recovery, regional failover, or a guaranteed recovery time. Do not mark
+OPERATIONS_VERIFIED true on the strength of this archive alone.

@@ -1,3 +1,4 @@
+import {fullSnapshot,backupObject} from './full-backup.js';
 import {exportOperations} from './operations-backup.js';
 import {supportApi,isOperator} from './support.js';
 import {PDFDocument} from 'pdf-lib';
@@ -141,6 +142,12 @@ export async function handleApi(request,env){
   const owner=await digest(new TextEncoder().encode(identity));
   if(!['GET','HEAD'].includes(method))sameOrigin(request);
   if(path[0]==='status'&&method==='GET')return json({...readiness(env),account:owner,operator:isOperator(env,owner)});
+  if(path[0]==='admin'&&['full-backup','backup-object'].includes(path[1])&&method==='GET'){
+   assert(isOperator(env,owner),403,'Owner access required');
+   if(path[1]==='full-backup')return json(await fullSnapshot(env.DB));
+   const object=await backupObject(env,url.searchParams.get('key'));
+   return new Response(object.body,{headers:{'Content-Type':'application/octet-stream','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+  }
   if(path[0]==='admin'&&path[1]==='backup'&&method==='GET'){
    assert(isOperator(env,owner),403,'Owner access required');
    const backup=await exportOperations(env.DB);

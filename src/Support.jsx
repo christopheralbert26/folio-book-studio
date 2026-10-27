@@ -1,3 +1,4 @@
+import {downloadFullBackup} from './fullBackup';
 import React,{useEffect,useState} from 'react';
 import {api} from './api';
 export function SupportThread({orderId,admin=false,onChange}){
@@ -22,7 +23,7 @@ export function SupportThread({orderId,admin=false,onChange}){
  </section>;
 }
 export function OwnerDesk(){
- const [allowed,setAllowed]=useState(false),[open,setOpen]=useState(false),[data,setData]=useState(null),[page,setPage]=useState(0),[error,setError]=useState(''),[filter,setFilter]=useState('all');
+ const [allowed,setAllowed]=useState(false),[open,setOpen]=useState(false),[data,setData]=useState(null),[page,setPage]=useState(0),[error,setError]=useState(''),[filter,setFilter]=useState('all'),[backupBusy,setBackupBusy]=useState(false),[backupStatus,setBackupStatus]=useState('');
  useEffect(()=>{api('status').then(s=>setAllowed(s.operator)).catch(()=>{});},[]);
  const load=()=>api(`admin/orders?page=${page}`).then(d=>{setData(d);setError('');}).catch(e=>setError(e.message));
  useEffect(()=>{if(open&&allowed)load();},[open,allowed,page]);
@@ -31,6 +32,7 @@ export function OwnerDesk(){
  return <section className="owner-desk"><h2>Owner order desk</h2><p>Private management for the shop owner.</p><button className="btn secondary" onClick={()=>setOpen(!open)}>{open?'Close order desk':'Manage orders and support'}</button>
  {open&&<><p>Review printer status before promising cancellation. Confirm refunds in Stripe and printing changes in Lulu, then record the outcome in your reply.</p><div className="inline-buttons"><a href="https://dashboard.stripe.com/" target="_blank" rel="noreferrer">Open Stripe ↗</a><a href="https://developers.sandbox.lulu.com/print-jobs" target="_blank" rel="noreferrer">Lulu sandbox ↗</a><a href="https://developers.lulu.com/print-jobs" target="_blank" rel="noreferrer">Lulu production ↗</a><button onClick={load}>Refresh desk</button></div>
  <section className="support-thread"><h3>Order and support backup</h3><p>Download order records, delivery addresses, payment references, status history, and support conversations. Keep this customer data private. Manuscripts and print files are backed up separately from each book.</p><a className="btn secondary" href="/api/admin/backup" download>Download order and support backup</a><p><small>This download does not change orders or payments.</small></p></section>
+ <section className="support-thread"><h3>Full application backup</h3><p>Includes all accounts’ database records, manuscripts, artwork, project files, and print proofs. Keep this private archive secure. Runtime secrets and hosting configuration are recovered separately.</p><button className="btn secondary" disabled={backupBusy} onClick={async()=>{setBackupBusy(true);setBackupStatus('Starting backup…');try{await downloadFullBackup(setBackupStatus);}catch(e){setBackupStatus(e.message);}finally{setBackupBusy(false);}}}>{backupBusy?'Backing up…':'Download full application backup'}</button><p role="status">{backupStatus}</p></section>
  <label className="field"><span>Show on this page</span><select value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All orders</option><option value="attention">Requests and problems</option></select></label>
  {error&&<p role="alert">{error}</p>}{data&&!rows.length&&<p>No matching orders on this page.</p>}
  {rows.map(o=><details className="order-card" key={o.id}><summary>{o.title} · {o.state.replaceAll('_',' ')} · {o.support_status||'No request'} · {o.environment}</summary><p>Order {o.id}</p><p>{o.quantity} copies · {(o.total/100).toFixed(2)} {o.currency.toUpperCase()}</p><p>Lulu job: {o.job_id||'Not submitted'}</p><p className="break-id">Stripe checkout: {o.payment_id||'Not started'}</p>{o.syncError&&<p role="alert">{o.syncError}</p>}<SupportThread orderId={o.id} admin onChange={load}/></details>)}
