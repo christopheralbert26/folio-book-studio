@@ -1,4 +1,4 @@
-import {downloadFullBackup} from './fullBackup';
+const downloadFullBackup=(...args)=>import('./fullBackup').then(m=>m.downloadFullBackup(...args));
 import React,{useEffect,useState} from 'react';
 import {api} from './api';
 export function SupportThread({orderId,admin=false,onChange}){

@@ -1,12 +1,13 @@
 import {SupportThread,OwnerDesk} from './Support';
 import React,{useEffect,useState} from 'react';
 import {api,uploadBytes} from './api';
-import {generateFullCover,download} from './generation';
+import {download} from './download';
+const generateFullCover=(...args)=>import('./generation').then(m=>m.generateFullCover(...args));
 import {saveProject} from './storage';
 export function SetupStatus(){
  const [state,setState]=useState(null),[error,setError]=useState('');
  useEffect(()=>{api('status').then(setState).catch(e=>setError(e.message));},[]);
- return <section className="setup-status"><h3>Printing setup</h3>{error&&<p role="alert">{error}</p>}{state&&<><p>{state.checkoutReady?(state.sandbox?'Sandbox checkout is available. Test payments do not print or ship books.':'Checkout is available.'):'You can prepare and save your book. Printing is not available yet.'}</p><ul>{state.checks.map(c=><li key={c.key}><span>{c.ready?'✓':'○'}</span>{c.label}<small>{c.ready?'Ready':'Not connected / verified'}</small></li>)}</ul></>}</section>;
+ return <section className="setup-status"><h3>Printing setup</h3>{error&&<p role="alert">{error}</p>}{state&&<><p>{state.checkoutReady?(state.sandbox?'Sandbox checkout is available. Test payments do not print or ship books.':'Checkout is available.'):'You can prepare and save your book. Printing is not available yet.'}</p><ul>{(state.operator?state.checks:[]).map(c=><li key={c.key}><span>{c.ready?'✓':'○'}</span>{c.label}<small>{c.ready?'Ready':'Not connected / verified'}</small></li>)}</ul></>}</section>;
 }
 export function PrintFormat({project,proof,onChange}){
  const [formats,setFormats]=useState([]),[error,setError]=useState('');
@@ -55,7 +56,7 @@ export function Checkout({project}){
  {!status?.checkoutReady?<SetupStatus/>:<>
  {status.sandbox&&<p role="status">Sandbox test only: use test payment details. No books will be printed or shipped.</p>}
  <label className="field"><span>Approved production edition</span><select value={selected} onChange={e=>reset(()=>setSelected(e.target.value))}><option value="">Select an edition</option>{editions.map(e=><option key={e.id} value={e.id}>v{e.revision} · {new Date(e.created).toLocaleString()}</option>)}</select></label>
- {Object.keys(address).map(key=><label className="field" key={key}><span>{({name:'Recipient',street1:'Address',street2:'Address line 2',city:'City',state_code:'State / province',postcode:'Postal code',country_code:'Country code (US, GB, etc.)',phone_number:'Delivery phone'})[key]}</span><input maxLength={200} value={address[key]} onChange={e=>reset(()=>setAddress({...address,[key]:key==='country_code'?e.target.value.toUpperCase():e.target.value}))}/></label>)}
+ {Object.keys(address).map(key=><label className="field" key={key}><span>{({name:'Recipient',street1:'Address',street2:'Address line 2',city:'City',state_code:'State / province',postcode:'Postal code',country_code:'Country code (US, GB, etc.)',phone_number:'Delivery phone'})[key]}</span><input autoComplete={({name:"shipping name",street1:"shipping address-line1",street2:"shipping address-line2",city:"shipping address-level2",state_code:"shipping address-level1",postcode:"shipping postal-code",country_code:"shipping country",phone_number:"shipping tel"})[key]} type={key==='phone_number'?'tel':'text'} maxLength={200} value={address[key]} onChange={e=>reset(()=>setAddress({...address,[key]:key==='country_code'?e.target.value.toUpperCase():e.target.value}))}/></label>)}
  <label className="field"><span>Copies (order one as a physical proof)</span><input type="number" min="1" max="999" value={quantity} onChange={e=>reset(()=>setQuantity(+e.target.value))}/></label>
  <label className="field"><span>Shipping service</span><select value={shipping} onChange={e=>reset(()=>setShipping(e.target.value))}>{['MAIL','PRIORITY_MAIL','GROUND','EXPEDITED','EXPRESS'].map(s=><option key={s}>{s}</option>)}</select></label>
  <button className="btn" disabled={busy||!selected} onClick={()=>task(async()=>setQuote(await api('orders',{editionId:selected,quantity,address,shippingLevel:shipping})))}>Get live estimate</button>

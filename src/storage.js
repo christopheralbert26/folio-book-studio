@@ -1,3 +1,4 @@
+import {mapConcurrent} from './tasks.js';
 import { openDB } from 'idb';
 import {api,packFiles,unpackFiles} from './api';
 const db = openDB('folio-private-studio', 1, { upgrade(db) { db.createObjectStore('projects', { keyPath: 'id' }); } });
@@ -23,12 +24,11 @@ export function saveProject(project) {
 }
 export async function getProjects() {
  const status=await api('status'),rows=await api('projects');
- const cloud=[];
- for(const row of rows){
+ const cloud=await mapConcurrent(rows,4,async row=>{
   const saved=await api(`projects/${row.id}`),project=saved.project;
-  const coverArt=project.coverArt?await unpackFiles(project.coverArt):null;
-  cloud.push({...project,coverArt,_cloudSummary:true,_account:status.account,_cloudVersion:saved.version});
- }
+  const coverArt=project.coverArt?await unpackFiles({bytes:project.coverArt.bytes,mime:project.coverArt.mime}):null;
+  return {...project,coverArt,_cloudSummary:true,_account:status.account,_cloudVersion:saved.version};
+ });
  const local=await (await db).getAll('projects');
  // Legacy drafts remain available on this device and migrate when the user opens them.
  return [...cloud,...local.filter(p=>!p._account&&!rows.some(r=>r.id===p.id))].sort((a,b)=>b.updated-a.updated);
@@ -37,9 +37,9 @@ export async function loadProject(id){
  const status=await api('status'),saved=await api(`projects/${id}`);
  return {...await unpackFiles(saved.project),_account:status.account,_cloudVersion:saved.version};
 }
-export async function deleteProject(id) {
+export async function deleteProject(id,cloud=false) {
  await (queues.get(id)||Promise.resolve()).catch(()=>{});
  const local=await (await db).get('projects',id);
- if(versions.has(id)||local?._cloudVersion)await api(`projects/${id}`,null,'DELETE');
+ if(cloud||versions.has(id)||local?._cloudVersion)await api(`projects/${id}`,null,'DELETE');
  await (await db).delete('projects',id);versions.delete(id);
 }

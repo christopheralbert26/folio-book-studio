@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import {packFiles,unpackFiles,fileHash} from './api';
-import {download} from './generation';
+import {download} from './download';
 import {loadProject} from './storage';
 export async function exportProject(project){
  if(project._cloudSummary)project=await loadProject(project.id);

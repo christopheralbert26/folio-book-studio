@@ -22,7 +22,7 @@ export default function LibraryCover({project, onOpen}) {
   onClick={() => onOpen(project)}
  >
   {showArt
-   ? <img src={image.url} alt={`Uploaded cover for ${project.title}`} onError={() => setImage(null)}/>
+   ? <><img loading="lazy" decoding="async" src={image.url} alt={`Uploaded cover for ${project.title}`} onError={() => setImage(null)}/><span className="cover-title-overlay"><strong>{project.title}</strong>{project.author&&<small>{project.author}</small>}</span></>
    : <><Leaf size={35}/><h2>{project.title}</h2><p>{project.author || 'Your personal edition'}</p></>}
  </button>;
 }

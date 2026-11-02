@@ -1,4 +1,3 @@
-import UTIF from 'utif';
 export async function imageFromBytes(bytes,mime) {
  const url=URL.createObjectURL(new Blob([bytes],{type:mime}));
  try { const img=new Image(); img.src=url; await img.decode(); return img; } finally { URL.revokeObjectURL(url); }
@@ -6,7 +5,7 @@ export async function imageFromBytes(bytes,mime) {
 export async function importImage(file) {
  if(file.size>20*1024*1024)throw Error('Choose an image smaller than 20 MB.');
  const original=new Uint8Array(await file.arrayBuffer());let mime=file.type, bytes=original;
- if(/\.tiff?$/i.test(file.name)) { const pages=UTIF.decode(original.buffer);if(!pages.length)throw Error('This TIFF could not be decoded. Export it as PNG.');UTIF.decodeImage(original.buffer,pages[0]);const p=pages[0];if(p.width*p.height>40000000)throw Error('Image is too large. Export an image under 40 megapixels.');const canvas=document.createElement('canvas');canvas.width=p.width;canvas.height=p.height;canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(UTIF.toRGBA8(p)),p.width,p.height),0,0);bytes=new Uint8Array(await (await new Promise(r=>canvas.toBlob(r,'image/png'))).arrayBuffer());mime='image/png'; }
+ if(/\.tiff?$/i.test(file.name)) { const {default:UTIF}=await import('utif');const pages=UTIF.decode(original.buffer);if(!pages.length)throw Error('This TIFF could not be decoded. Export it as PNG.');UTIF.decodeImage(original.buffer,pages[0]);const p=pages[0];if(p.width*p.height>40000000)throw Error('Image is too large. Export an image under 40 megapixels.');const canvas=document.createElement('canvas');canvas.width=p.width;canvas.height=p.height;canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(UTIF.toRGBA8(p)),p.width,p.height),0,0);bytes=new Uint8Array(await (await new Promise(r=>canvas.toBlob(r,'image/png'))).arrayBuffer());mime='image/png'; }
  if(!['image/png','image/jpeg','image/webp'].includes(mime))throw Error('Choose JPG, PNG, WebP, or TIFF.');
  const img=await imageFromBytes(bytes,mime);if(img.width*img.height>40000000)throw Error('Choose an image under 40 megapixels.');
  return {id:crypto.randomUUID(),name:file.name,original,bytes,mime,width:img.width,height:img.height,gray:true,rotation:0,scale:1,x:0,y:0,crop:0,caption:'',after:1};

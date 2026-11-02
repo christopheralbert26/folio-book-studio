@@ -140,4 +140,4 @@ export async function generateFullCover(project,dimensions,frontBytes){
  if(profile.barcodeReserve){const b=profile.barcodeReserve;p.drawRectangle({x:bleed+b.x,y:bleed+b.y,width:b.width,height:b.height,color:rgb(1,1,1)});}
  return {bytes:await doc.save(),spine,width,height};
 }
-export function download(bytes,name,type='application/pdf'){const url=URL.createObjectURL(new Blob([bytes],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);}
+export {download} from './download.js';
