@@ -1,6 +1,6 @@
 # Folio launch and owner guide
 
-Updated November 2, 2026. Site: https://folio-book-studio.daringbean10.chatgpt.site/
+Updated November 2, 2026. Site: https://folio-book-studio.albert-chri.chatgpt.site/
 
 ## What you can use now
 
@@ -10,8 +10,8 @@ For a print edition: choose a verified print format, review the interior and ful
 
 ## What the owner needs to finish before real customer orders
 
-1. Finish Stripe account activation and payout/bank verification in Stripe. Supply the LIVE secret key securely in the runtime settings. Register the live webhook at https://folio-book-studio.daringbean10.chatgpt.site/api/stripe-webhook for checkout.session.completed and checkout.session.async_payment_succeeded, using Snapshot payloads, and save that endpoint's signing secret securely. Sandbox credentials and objects cannot stand in for live credentials.
-2. Supply Lulu PRODUCTION credentials securely. Configure the production payment method/automatic payment arrangement in Lulu; customer payment to Stripe does not by itself pay Lulu. Register the production PRINT_JOB_STATUS_CHANGED webhook at https://folio-book-studio.daringbean10.chatgpt.site/api/lulu-webhook. Verify production pricing, product specifications, file delivery, callbacks and printer billing.
+1. Finish Stripe account activation and payout/bank verification in Stripe. Supply the LIVE secret key securely in the runtime settings. Register the live webhook at https://folio-book-studio.albert-chri.chatgpt.site/api/stripe-webhook for checkout.session.completed and checkout.session.async_payment_succeeded, using Snapshot payloads, and save that endpoint's signing secret securely. Sandbox credentials and objects cannot stand in for live credentials.
+2. Supply Lulu PRODUCTION credentials securely. Configure the production payment method/automatic payment arrangement in Lulu; customer payment to Stripe does not by itself pay Lulu. Register the production PRINT_JOB_STATUS_CHANGED webhook at https://folio-book-studio.albert-chri.chatgpt.site/api/lulu-webhook. Verify production pricing, product specifications, file delivery, callbacks and printer billing.
 3. Order ONE physical proof through Lulu's production portal using the approved interior and full-cover files, while public live checkout remains disabled. This is a real paid purchase you must authorize. Inspect trim, spine alignment, binding, readability, image quality and every page. Record the result before setting PHYSICAL_PROOF_VERIFIED.
 4. Choose your selling countries, business/support contact, refund/cancellation/reprint policy, manuscript retention/deletion policy and pricing margin. Current quotes pass through printer estimates; a shop margin and payment-processing fees are not added. Confirm your tax handling with an appropriate adviser. The existing privacy/storage explanation is not a completed set of business policies. Publish your actual policies and implement the retention process before setting OPERATIONS_VERIFIED.
 5. Arrange hosting disaster-recovery access with Sites support and keep a separate secure copy of runtime credentials. Full cloud-data backup and local restoration have been tested; provider-side live database/storage recovery has NOT. Download private backups regularly and keep an independent protected copy. Browser-only legacy drafts need their individual book backups.
@@ -39,3 +39,5 @@ Use the full application backup button for the cloud database and indexed manusc
 - Stripe go-live checklist: https://docs.stripe.com/get-started/checklist/go-live
 - Lulu API documentation: https://api.lulu.com/docs/
 - Lulu API support and billing setup: https://help.api.lulu.com/
+
+The previous daringbean10 address redirects to this canonical address. Existing Stripe test and Lulu sandbox webhook destinations were updated and signed no-op callbacks returned HTTP 200 on November 2, 2026. Live webhook setup is still required before production.
